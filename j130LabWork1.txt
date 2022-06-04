@@ -1,0 +1,86 @@
+CREATE TABLE products (
+    articul CHAR(7) PRIMARY KEY,    
+    product_name VARCHAR(50) NOT NULL,
+    color VARCHAR(20),
+    price INT CHECK (price > 0),
+    available_quantity INT CHECK(available_quantity >= 0)
+);
+
+CREATE TABLE orders (
+    id INT PRIMARY KEY GENERATED ALWAYS AS IDENTITY (START WITH 1, INCREMENT BY 1),    
+    creation_date DATE NOT NULL,
+    full_name VARCHAR(100) NOT NULL,
+    phone VARCHAR(50),
+    email VARCHAR(50),
+    address VARCHAR(200) NOT NULL,
+    status VARCHAR(1) ,
+    shipping_date DATE ,
+    CHECK (status = 'P' or status = 'S' or status = 'C'),
+    CHECK (status = 'S' and shipping_date is NOT NULL or
+           status in ('P','C') and shipping_date is NULL)
+);
+
+CREATE TABLE positions (
+    orders_id INT,    
+    products_articul CHAR(7),
+    catalog_price INT CHECK (catalog_price > 0),
+    ordered_quantity INT CHECK(ordered_quantity > 0),
+    FOREIGN KEY (orders_id) REFERENCES orders (id),
+    FOREIGN KEY (products_articul) REFERENCES products (articul),
+    PRIMARY KEY (orders_id, products_articul)
+);
+
+INSERT INTO products (articul, product_name, color, price, available_quantity)
+VALUES
+('3251615', 'Стол кухонный', 'белый', 8000, 12),
+('3251616', 'Стол кухонный', '', 8000, 15),
+('3251617', 'Стул столовый "гусарский"', 'орех', 4000, 10),
+('3251619', 'Стул столовый с высокой спинкой', 'белый', 3500, 37),
+('3251620', 'Стул столовый с высокой спинкой', 'коричневый', 3500, 52);
+
+
+INSERT INTO orders (creation_date, full_name, phone, email, address, status, shipping_date)
+VALUES
+('2020-11-20', 'Сергей Иванов', '(981)123-45-67', '', 'ул. Веденеева, 20-1-41', 'S', '2020-11-29'),
+('2020-11-22', 'Алексей Комаров', '(921)001-22-33', '', 'пр. Пархоменко, 51-2-123', 'S', '2020-11-29'),
+('2020-11-28', 'Ирина Викторовна', '(911)009-88-77', '', 'Тихорецкий пр., 21-21', 'P', null),
+('2020-12-03', 'Павел Николаев', '', 'pasha_nick@mail.ru', 'ул. Хлопина, 3-88', 'P', null),
+('2020-12-03', 'Антонина Васильева', '(931)777-66-55', '', 'пр. Науки, 11-3-9', 'P', null),
+('2020-12-10', 'Ирина Викторова', '(911)009-88-77', '', 'Тихорецкий пр., 21-21', 'P', null);
+
+INSERT INTO positions (orders_id, products_articul, catalog_price, ordered_quantity)
+VALUES
+(1, '3251616', 7500, 1),
+(2, '3251615', 7500, 1),
+(3, '3251615', 8000, 1),
+(3, '3251617', 4000, 4),
+(4, '3251619', 3500, 2),
+(5, '3251615', 8000, 1),
+(5, '3251617', 4000, 4),
+(6, '3251617', 4000, 2);
+
+--заказы созданные в ноябре:
+SELECT * FROM orders WHERE MONTH(creation_date) = 11;
+-- --заказы созданные в декабре:
+-- SELECT * FROM orders WHERE MONTH(creation_date) = 12;
+-- --заказы отгруженные в ноябре:
+-- SELECT * FROM orders WHERE MONTH(shipping_date) = 11;
+--заказы отгруженные в декабре:
+SELECT * FROM orders WHERE MONTH(shipping_date) = 12;
+--все клиенты и их: ФИО-phone-email:
+SELECT full_name, phone, email FROM orders;
+--позиции заказа с id=3:
+SELECT * FROM positions WHERE orders_id = 3;
+--товары из заказов с id=3:
+SELECT * FROM products INNER JOIN positions ON products.articul = positions.products_articul WHERE positions.orders_id = 3;
+--заказы и количество позиций в каждом из них + вычисление общий стоимости заказа:
+SELECT creation_date, full_name, phone, email, address, status, shipping_date,
+(SELECT COUNT(*) FROM positions WHERE positions.orders_id = orders.id) AS "AMOUNT POSITIONS",
+(SELECT SUM(catalog_price*ordered_quantity) FROM positions WHERE positions.orders_id = orders.id)  AS "TOTAL PRICE"
+FROM orders;
+
+--запрос фиксирующий отгрузку заказа с id=5:
+UPDATE orders SET orders.status = 'S', orders.shipping_date = CURRENT_DATE WHERE orders.id = 5;
+UPDATE products 
+SET available_quantity = available_quantity -(SELECT ordered_quantity FROM positions WHERE orders_id =5 AND positions.products_articul = products.articul)
+WHERE articul IN (SELECT products_articul FROM positions WHERE orders_id = 5);
